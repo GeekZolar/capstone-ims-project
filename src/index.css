@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:root,
+html[data-theme="light"] {
+  --bg: 255 255 255;
+  --bg-muted: 248 250 252;
+  --card: 255 255 255;
+  --border: 226 232 240;
+  --text: 15 23 42;
+  --muted: 100 116 139;
+  --primary: 15 118 110;
+  --primary-foreground: 255 255 255;
+  --success: 22 163 74;
+  --warning: 234 179 8;
+  --danger: 220 38 38;
+  --info: 37 99 235;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: 10 12 16;
+  --bg-muted: 17 24 39;
+  --card: 17 24 39;
+  --border: 51 65 85;
+  --text: 226 232 240;
+  --muted: 148 163 184;
+  --primary: 45 212 191;
+  --primary-foreground: 15 23 42;
+  --success: 34 197 94;
+  --warning: 250 204 21;
+  --danger: 248 113 113;
+  --info: 96 165 250;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-slate-700 {
+  color: rgb(var(--text));
+}
+
+html[data-theme="dark"] .text-slate-600,
+html[data-theme="dark"] .text-slate-500 {
+  color: rgb(var(--muted));
+}
+
+html[data-theme="dark"] .bg-white {
+  background-color: rgb(var(--card));
+}
+
+html[data-theme="dark"] .border-slate-200 {
+  border-color: rgb(var(--border));
+}
+
+html[data-theme="dark"] .bg-slate-50,
+html[data-theme="dark"] .bg-slate-100 {
+  background-color: rgb(var(--bg-muted));
+}
