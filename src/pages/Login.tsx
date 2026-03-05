@@ -8,7 +8,6 @@ import { useAuthStore } from '../store/authStore'
 import { Button } from '../components/common/Button'
 import { Input } from '../components/common/Input'
 import { useToast } from '../components/common/Toast'
-import { useUiStore } from '../store/uiStore'
 
 const schema = z.object({
   username: z.string().min(2, 'Enter a username'),
@@ -21,14 +20,11 @@ export const Login = () => {
   const navigate = useNavigate()
   const login = useAuthStore((state) => state.login)
   const { notify } = useToast()
-  const mfaEnabled = useUiStore((state) => state.mfaEnabled)
-  const [pendingAuth, setPendingAuth] = useState<{
-    user: Awaited<ReturnType<typeof authService.login>>['user']
-    token: string
-  } | null>(null)
+  const [pendingMfa, setPendingMfa] = useState<{ mfaToken: string } | null>(null)
   const [showMfaModal, setShowMfaModal] = useState(false)
   const [mfaCode, setMfaCode] = useState('')
   const [mfaError, setMfaError] = useState('')
+  const [mfaSubmitting, setMfaSubmitting] = useState(false)
 
   const {
     register,
@@ -39,7 +35,7 @@ export const Login = () => {
     defaultValues: { username: '', password: '' },
   })
 
-  const completeLogin = (user: Awaited<ReturnType<typeof authService.login>>['user'], token: string) => {
+  const completeLogin = (user: NonNullable<Awaited<ReturnType<typeof authService.login>>['user']>, token: string) => {
     login(user, token)
     notify({
       title: 'Welcome back',
@@ -51,30 +47,42 @@ export const Login = () => {
 
   const onSubmit = async (values: LoginForm) => {
     const response = await authService.login(values)
-    if (mfaEnabled) {
-      setPendingAuth({ user: response.user, token: response.token })
+    if (response.mfaRequired && response.mfaToken) {
+      setPendingMfa({ mfaToken: response.mfaToken })
       setShowMfaModal(true)
       return
     }
-    completeLogin(response.user, response.token)
+    if (response.user != null) {
+      completeLogin(response.user, response.token)
+    }
   }
 
   const handleMfaCancel = () => {
     setShowMfaModal(false)
-    setPendingAuth(null)
+    setPendingMfa(null)
     setMfaCode('')
     setMfaError('')
   }
 
-  const handleMfaVerify = () => {
+  const handleMfaVerify = async () => {
     if (!/^\d{6}$/.test(mfaCode)) {
       setMfaError('Enter the 6-digit code from your authenticator app.')
       return
     }
-    if (pendingAuth) {
-      completeLogin(pendingAuth.user, pendingAuth.token)
+    if (!pendingMfa) return
+    setMfaError('')
+    setMfaSubmitting(true)
+    try {
+      const response = await authService.verifyMfa(pendingMfa.mfaToken, mfaCode)
+      if (response.user != null) {
+        completeLogin(response.user, response.token)
+        handleMfaCancel()
+      }
+    } catch (err) {
+      setMfaError(err instanceof Error ? err.message : 'Verification failed. Please try again.')
+    } finally {
+      setMfaSubmitting(false)
     }
-    handleMfaCancel()
   }
 
   return (
@@ -158,11 +166,11 @@ export const Login = () => {
               />
             </div>
             <div className="mt-6 flex justify-end gap-2">
-              <Button variant="secondary" type="button" onClick={handleMfaCancel}>
+              <Button variant="secondary" type="button" onClick={handleMfaCancel} disabled={mfaSubmitting}>
                 Cancel
               </Button>
-              <Button type="button" onClick={handleMfaVerify}>
-                Verify
+              <Button type="button" onClick={handleMfaVerify} disabled={mfaSubmitting}>
+                {mfaSubmitting ? 'Verifying...' : 'Verify'}
               </Button>
             </div>
           </div>

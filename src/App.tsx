@@ -18,6 +18,12 @@ const Replenishment = lazy(() =>
 const PurchaseOrders = lazy(() =>
   import('./pages/PurchaseOrders').then((m) => ({ default: m.PurchaseOrders })),
 )
+const PurchaseOrderCreate = lazy(() =>
+  import('./pages/PurchaseOrderCreate').then((m) => ({ default: m.PurchaseOrderCreate })),
+)
+const PurchaseOrderApproval = lazy(() =>
+  import('./pages/PurchaseOrderApproval').then((m) => ({ default: m.PurchaseOrderApproval })),
+)
 const Transfers = lazy(() =>
   import('./pages/Transfers').then((m) => ({ default: m.Transfers })),
 )
@@ -58,6 +64,8 @@ function App() {
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/replenishment" element={<Replenishment />} />
             <Route path="/purchase-orders" element={<PurchaseOrders />} />
+            <Route path="/purchase-orders/new" element={<PurchaseOrderCreate />} />
+            <Route path="/po/approve/:poId" element={<PurchaseOrderApproval />} />
             <Route path="/transfers" element={<Transfers />} />
             <Route element={<RequireRole minRole="forecast_editor" />}>
               <Route path="/forecasts" element={<Forecasts />} />

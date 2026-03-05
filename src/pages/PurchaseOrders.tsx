@@ -8,6 +8,7 @@ import { StatusPill } from '../components/common/StatusPill'
 import { Table, TableCell, TableHeader, TableRow } from '../components/common/Table'
 import { usePurchaseOrders, useWarehouses } from '../hooks/useImsQueries'
 import { formatCurrency, formatDate } from '../utils/format'
+import { useNavigate } from 'react-router-dom'
 
 const statusMap = {
   draft: { label: 'Draft', variant: 'info' },
@@ -21,13 +22,18 @@ const statusMap = {
 export const PurchaseOrders = () => {
   const poQuery = usePurchaseOrders()
   const warehousesQuery = useWarehouses()
+  const navigate = useNavigate()
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Purchase Orders"
         description="Create, approve, and track supplier purchase orders."
-        actions={<Button>New PO</Button>}
+        actions={
+          <Button onClick={() => navigate('/purchase-orders/new')}>
+            New PO
+          </Button>
+        }
       />
 
       <Card className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
@@ -63,6 +69,7 @@ export const PurchaseOrders = () => {
                 <TableCell className="text-xs font-semibold text-slate-500">Order Date</TableCell>
                 <TableCell className="text-xs font-semibold text-slate-500">Expected</TableCell>
                 <TableCell className="text-xs font-semibold text-slate-500">Total</TableCell>
+                <TableCell className="text-xs font-semibold text-slate-500">Actions</TableCell>
               </TableRow>
             </TableHeader>
             <tbody>
@@ -80,6 +87,15 @@ export const PurchaseOrders = () => {
                     <TableCell>{formatDate(po.orderDate)}</TableCell>
                     <TableCell>{formatDate(po.expectedDeliveryDate)}</TableCell>
                     <TableCell>{formatCurrency(po.totalValue, po.currency)}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        className="text-xs"
+                        onClick={() => navigate(`/po/approve/${po.id}`)}
+                      >
+                        Approve
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 )
               })}
