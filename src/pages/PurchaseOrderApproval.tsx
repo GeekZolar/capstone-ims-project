@@ -41,6 +41,7 @@ export const PurchaseOrderApproval = () => {
   const [warehouseId, setWarehouseId] = useState('')
   const [shippingMethod, setShippingMethod] = useState('')
   const [includeTax, setIncludeTax] = useState(true)
+  const [taxRate, setTaxRate] = useState(0)
   const [items, setItems] = useState<PurchaseOrderLineItem[]>([])
 
   const suppliersQuery = useSuppliers()
@@ -78,6 +79,12 @@ export const PurchaseOrderApproval = () => {
     setShippingMethod(data.shippingMethod ?? '')
     setIncludeTax(data.includeTax ?? true)
     if (data.items?.length) setItems(data.items)
+
+    const inferred =
+      data.subtotal && data.taxAmount
+        ? data.taxAmount / data.subtotal
+        : 0
+    setTaxRate(inferred || 0)
   }, [poQuery.data])
 
   const isBusy = approveMutation.isPending || rejectMutation.isPending || requestChangesMutation.isPending
@@ -279,15 +286,35 @@ export const PurchaseOrderApproval = () => {
         {/* Section 5: Tax */}
         <Card className="p-6">
           <h2 className="mb-4 text-lg font-semibold text-[rgb(var(--text))]">Tax Option</h2>
-          <Select
-            label="Tax"
-            value={includeTax !== false ? 'true' : 'false'}
-            onChange={(e) => setIncludeTax(e.target.value === 'true')}
-            disabled={readOnly}
-          >
-            <option value="true">Include Tax</option>
-            <option value="false">Exclude Tax</option>
-          </Select>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6 max-w-xl">
+            <div className="flex-1">
+              <Select
+                label="Tax"
+                value={includeTax !== false ? 'true' : 'false'}
+                onChange={(e) => setIncludeTax(e.target.value === 'true')}
+                disabled={readOnly}
+              >
+                <option value="true">Include Tax</option>
+                <option value="false">Exclude Tax</option>
+              </Select>
+            </div>
+
+            {includeTax && (
+              <div className="flex-1">
+                <Select
+                  label="Tax Percentage"
+                  value={String(taxRate)}
+                  onChange={(e) => setTaxRate(Number(e.target.value) || 0)}
+                  disabled={readOnly}
+                >
+                  <option value="0.05">5%</option>
+                  <option value="0.1">10%</option>
+                  <option value="0.15">15%</option>
+                  <option value="0.2">20%</option>
+                </Select>
+              </div>
+            )}
+          </div>
         </Card>
 
         {/* Section 6–8: Items & Totals */}
@@ -297,6 +324,7 @@ export const PurchaseOrderApproval = () => {
             onChange={setItems}
             currency={currency}
             includeTax={data.includeTax ?? includeTax}
+            taxRate={taxRate}
             readOnly={readOnly}
           />
         </Card>

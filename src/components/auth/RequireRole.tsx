@@ -16,7 +16,7 @@ export const RequireRole = ({ minRole }: { minRole: UserRole }) => {
   const allowed = user && roleWeight[user.role] >= roleWeight[minRole]
 
   if (!allowed) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to="/access-denied" replace />
   }
   return <Outlet />
 }

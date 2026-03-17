@@ -9,8 +9,17 @@ import {
   Truck,
   Users,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import type { UserRole } from '../types/ims'
 
-export const navigation = [
+export type NavigationItem = {
+  label: string
+  path: string
+  icon: LucideIcon
+  minRole?: UserRole
+}
+
+export const navigation: NavigationItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Inventory', path: '/inventory', icon: Boxes },
   { label: 'Replenishment', path: '/replenishment', icon: RefreshCcw },
@@ -18,6 +27,6 @@ export const navigation = [
   { label: 'Transfers', path: '/transfers', icon: Truck },
   { label: 'Forecasts', path: '/forecasts', icon: BarChart3 },
   { label: 'Reports', path: '/reports', icon: FileText },
-  { label: 'Users', path: '/users', icon: Users },
+  { label: 'Users', path: '/users', icon: Users, minRole: 'system_admin' },
   { label: 'Settings', path: '/settings', icon: Settings },
 ]

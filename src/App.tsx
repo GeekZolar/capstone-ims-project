@@ -37,6 +37,9 @@ const Users = lazy(() => import('./pages/Users').then((m) => ({ default: m.Users
 const Settings = lazy(() =>
   import('./pages/Settings').then((m) => ({ default: m.Settings })),
 )
+const AccessDenied = lazy(() =>
+  import('./pages/AccessDenied').then((m) => ({ default: m.AccessDenied })),
+)
 const NotFound = lazy(() =>
   import('./pages/NotFound').then((m) => ({ default: m.NotFound })),
 )
@@ -61,6 +64,7 @@ function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/access-denied" element={<AccessDenied />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/replenishment" element={<Replenishment />} />
             <Route path="/purchase-orders" element={<PurchaseOrders />} />

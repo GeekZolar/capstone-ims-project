@@ -151,7 +151,7 @@ export function ItemRow({
             <button
               type="button"
               onClick={() => setMenuOpen((o) => !o)}
-              className="rounded p-1 text-slate-500 hover:bg-slate-100"
+              className="rounded p-1 text-slate-500 hover:bg-slate-100 cursor-pointer"
               aria-label="Row actions"
             >
               ⋮

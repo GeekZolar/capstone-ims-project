@@ -3,10 +3,21 @@ import { LogOut } from 'lucide-react'
 import { navigation } from '../../config/navigation'
 import clsx from 'clsx'
 import { useAuthStore } from '../../store/authStore'
+import type { UserRole } from '../../types/ims'
+
+const roleWeight: Record<UserRole, number> = {
+  system_admin: 5,
+  po_approver: 4,
+  po_creator: 3,
+  forecast_editor: 3,
+  inventory_manager: 2,
+  read_only: 1,
+}
 
 export const AppSidebar = () => {
   const navigate = useNavigate()
   const logout = useAuthStore((state) => state.logout)
+  const user = useAuthStore((state) => state.user)
 
   const handleLogout = () => {
     logout()
@@ -29,7 +40,13 @@ export const AppSidebar = () => {
         </div>
       </div>
       <nav className="flex flex-1 flex-col gap-1">
-        {navigation.map((item) => {
+        {navigation
+          .filter((item) => {
+            if (!item.minRole) return true
+            if (!user) return false
+            return roleWeight[user.role] >= roleWeight[item.minRole]
+          })
+          .map((item) => {
           const Icon = item.icon
           return (
             <NavLink
