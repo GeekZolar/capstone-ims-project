@@ -7,6 +7,7 @@ import {
   transferOrders,
   warehouses,
 } from '../data/mockData'
+import { apiClient } from './api'
 import type {
   AlertItem,
   DashboardSummary,
@@ -16,6 +17,16 @@ import type {
   TransferOrder,
   Warehouse,
 } from '../types/ims'
+
+export interface InventoryAdjustmentPayload {
+  sku?: string
+  productId?: string
+  warehouseId: string
+  lotNumber?: string
+  expiryDate?: string
+  quantityDelta: number
+  reason: 'cycle_count' | 'damage' | 'expiry' | 'other'
+}
 
 const simulateNetwork = async <T>(data: T, delay = 700): Promise<T> => {
   await new Promise((resolve) => setTimeout(resolve, delay))
@@ -43,5 +54,9 @@ export const imsService = {
   },
   getForecasts(): Promise<ForecastItem[]> {
     return simulateNetwork(forecasts, 650)
+  },
+  async createInventoryAdjustment(payload: InventoryAdjustmentPayload): Promise<{ id: string; message: string }> {
+    const response = await apiClient.post('/inventory/adjust', payload)
+    return response.data as { id: string; message: string }
   },
 }

@@ -11,7 +11,7 @@ import { useToast } from '../components/common/Toast'
 
 const schema = z.object({
   username: z.string().min(2, 'Enter a username'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string().min(1, 'Enter your password'),
 })
 
 type LoginForm = z.infer<typeof schema>
@@ -46,14 +46,24 @@ export const Login = () => {
   }
 
   const onSubmit = async (values: LoginForm) => {
-    const response = await authService.login(values)
-    if (response.mfaRequired && response.mfaToken) {
-      setPendingMfa({ mfaToken: response.mfaToken })
-      setShowMfaModal(true)
-      return
-    }
-    if (response.user != null) {
-      completeLogin(response.user, response.token)
+    try {
+      const response = await authService.login(values)
+      if (response.mfaRequired && response.mfaToken) {
+        setPendingMfa({ mfaToken: response.mfaToken })
+        setShowMfaModal(true)
+        return
+      }
+      if (response.user != null) {
+        completeLogin(response.user, response.token)
+        return
+      }
+      throw new Error(response.message || 'Login succeeded but user profile was missing from response.')
+    } catch (err) {
+      notify({
+        title: 'Login failed',
+        message: err instanceof Error ? err.message : 'Unable to sign in. Please try again.',
+        variant: 'error',
+      })
     }
   }
 

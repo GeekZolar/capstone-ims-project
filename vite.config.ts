@@ -6,9 +6,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // Proxy /api to the backend to avoid CORS in development
+      // Proxy /api to the API gateway to avoid CORS in development
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://20.171.55.206',
         changeOrigin: true,
       },
     },

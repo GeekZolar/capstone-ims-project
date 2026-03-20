@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { imsService } from '../services/imsService'
 
 export const useDashboardSummary = () =>
@@ -21,3 +21,13 @@ export const useTransfers = () =>
 
 export const useForecasts = () =>
   useQuery({ queryKey: ['forecasts'], queryFn: imsService.getForecasts })
+
+export const useInventoryAdjustmentMutation = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: imsService.createInventoryAdjustment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    },
+  })
+}

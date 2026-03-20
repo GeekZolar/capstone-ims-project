@@ -47,6 +47,39 @@ export interface LoginResponse {
   message?: string
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length < 2) return null
+    const base64Url = parts[1]
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const normalized = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+    const decoded = atob(normalized)
+    const payload = JSON.parse(decoded) as unknown
+    return isRecord(payload) ? payload : null
+  } catch {
+    return null
+  }
+}
+
+function mapTokenToProfile(token: string): UserProfile | null {
+  const payload = decodeJwtPayload(token)
+  if (!payload) return null
+  const role = payload['role']
+  const name = payload['name'] ?? payload['username'] ?? payload['email']
+  const id = payload['sub'] ?? payload['userId'] ?? payload['id']
+  return {
+    id: String(id ?? ''),
+    name: String(name ?? 'User'),
+    email: String(payload['email'] ?? ''),
+    role: (typeof role === 'string' ? role : 'read_only') as UserRole,
+  }
+}
+
 function mapApiUserToProfile(apiUser: ApiLoginUser | undefined | null): UserProfile {
   if (!apiUser) {
     throw new Error('Login response missing user data')
@@ -90,19 +123,41 @@ export const authService = {
       throw new Error(message)
     }
 
-    const data = (await response.json()) as ApiLoginResponse
-    const dataRaw = data as unknown as Record<string, unknown>
+    const body = (await response.json()) as unknown
+    const bodyRaw = (body ?? {}) as Record<string, unknown>
+    const dataContainer = isRecord(bodyRaw['data']) ? (bodyRaw['data'] as Record<string, unknown>) : bodyRaw
+    const data = dataContainer as unknown as ApiLoginResponse
+    const dataRaw = dataContainer as Record<string, unknown>
     const rawUser = data.user ?? dataRaw['User'] ?? dataRaw['user']
+    const token =
+      data.accessToken ??
+      (dataRaw['accessToken'] as string | undefined) ??
+      (dataRaw['access_token'] as string | undefined) ??
+      (dataRaw['token'] as string | undefined) ??
+      ''
+    const refreshToken =
+      data.refreshToken ??
+      (dataRaw['refreshToken'] as string | undefined) ??
+      (dataRaw['refresh_token'] as string | undefined) ??
+      ''
+    const mfaRequired = Boolean(
+      data.mfaRequired ??
+      dataRaw['mfaRequired'] ??
+      dataRaw['mfa_required'] ??
+      false,
+    )
 
     const user =
-      rawUser != null ? mapApiUserToProfile(rawUser as ApiLoginUser) : null
+      rawUser != null
+        ? mapApiUserToProfile(rawUser as ApiLoginUser)
+        : (token ? mapTokenToProfile(token) : null)
 
     return {
-      token: data.accessToken ?? '',
-      refreshToken: data.refreshToken ?? '',
+      token,
+      refreshToken,
       mfaToken: data.mfaToken ?? (dataRaw['mfaToken'] as string) ?? '',
       expiresIn: data.expiresIn ?? 0,
-      mfaRequired: data.mfaRequired ?? false,
+      mfaRequired,
       user,
       message: data.message ?? dataRaw['message'] as string | undefined,
     }
