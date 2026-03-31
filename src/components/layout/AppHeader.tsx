@@ -66,7 +66,7 @@ export const AppHeader = () => {
             )}
             <div className="hidden text-xs md:block">
               <p className="font-semibold text-[rgb(var(--text))]">{user?.name ?? 'User'}</p>
-              <p className="text-[11px] text-[rgb(var(--muted))]">{user?.role ?? 'role'}</p>
+              <p className="text-[11px] text-[rgb(var(--muted))]">{user?.roleName ?? ''}</p>
             </div>
             <ChevronDown className="h-4 w-4 text-[rgb(var(--muted))]" />
           </button>

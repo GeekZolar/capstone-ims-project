@@ -1,43 +1,159 @@
-import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Button } from '../components/common/Button'
 import { Card } from '../components/common/Card'
 import { Input } from '../components/common/Input'
 import { PageHeader } from '../components/common/PageHeader'
 import { Select } from '../components/common/Select'
+import { useToast } from '../components/common/Toast'
+import { authService } from '../services/authService'
+import {
+  clearMfaQrDataUrl,
+  getMfaQrDataUrlFromSession,
+  persistMfaQrDataUrl,
+  useAuthStore,
+} from '../store/authStore'
 import { useUiStore } from '../store/uiStore'
 
 export const Settings = () => {
   const theme = useUiStore((state) => state.theme)
   const setTheme = useUiStore((state) => state.setTheme)
-  const mfaEnabled = useUiStore((state) => state.mfaEnabled)
-  const setMfaEnabled = useUiStore((state) => state.setMfaEnabled)
   const userAvatar = useUiStore((state) => state.userAvatar)
   const setUserAvatar = useUiStore((state) => state.setUserAvatar)
+  const user = useAuthStore((state) => state.user)
+  const mfaEnabled = useAuthStore((state) => state.mfaEnabled)
+  const setMfaEnabled = useAuthStore((state) => state.setMfaEnabled)
+  const { notify } = useToast()
+
   const [showMfaModal, setShowMfaModal] = useState(false)
+  /** `enroll` = confirm setup with code from QR; `disable` = turn off MFA with current authenticator code */
+  const [mfaModalPurpose, setMfaModalPurpose] = useState<'enroll' | 'disable'>('enroll')
   const [mfaCode, setMfaCode] = useState('')
   const [mfaError, setMfaError] = useState('')
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
+  const [setupLoading, setSetupLoading] = useState(false)
+  const [verifyLoading, setVerifyLoading] = useState(false)
 
-  const handleMfaToggle = () => {
+  useEffect(() => {
+    const saved = getMfaQrDataUrlFromSession()
+    if (saved) {
+      setQrCodeUrl(saved)
+    }
+  }, [])
+
+  const showMfaSetupBlock = mfaEnabled || Boolean(qrCodeUrl) || setupLoading
+
+  const openDisableMfaModal = () => {
+    setMfaModalPurpose('disable')
+    setMfaCode('')
+    setMfaError('')
+    setShowMfaModal(true)
+  }
+
+  const handleMfaToggle = async () => {
     if (mfaEnabled) {
-      setMfaEnabled(false)
+      openDisableMfaModal()
       return
     }
-    setShowMfaModal(true)
+
+    const emailAddress = user?.email?.trim()
+    if (!emailAddress) {
+      notify({
+        title: 'Email required',
+        message: 'Sign in again or update your profile so your email is available for MFA setup.',
+        variant: 'error',
+      })
+      return
+    }
+
+    setSetupLoading(true)
+    setMfaError('')
+    try {
+      const { qrCodeUrl: url, mfaEnabled: serverMfa } = await authService.setupMfa(emailAddress)
+      if (url.trim()) {
+        const trimmed = url.trim()
+        setQrCodeUrl(trimmed)
+        persistMfaQrDataUrl(trimmed)
+        if (serverMfa) {
+          setMfaEnabled(true)
+        }
+        return
+      }
+      if (serverMfa) {
+        setMfaEnabled(true)
+        notify({
+          title: 'MFA enabled',
+          message: 'Multi-factor authentication is now active.',
+          variant: 'success',
+        })
+        return
+      }
+      notify({
+        title: 'MFA setup incomplete',
+        message: 'The server did not return a QR code. Try again or contact support.',
+        variant: 'warning',
+      })
+    } catch (err) {
+      notify({
+        title: 'MFA setup failed',
+        message: err instanceof Error ? err.message : 'Could not start MFA setup.',
+        variant: 'error',
+      })
+    } finally {
+      setSetupLoading(false)
+    }
   }
 
   const handleMfaCancel = () => {
     setShowMfaModal(false)
     setMfaCode('')
     setMfaError('')
+    setMfaModalPurpose('enroll')
   }
 
-  const handleMfaVerify = () => {
+  const handleMfaVerify = async () => {
     if (!/^\d{6}$/.test(mfaCode)) {
       setMfaError('Enter the 6-digit code from your authenticator app.')
       return
     }
-    setMfaEnabled(true)
-    handleMfaCancel()
+    setVerifyLoading(true)
+    setMfaError('')
+    try {
+      if (mfaModalPurpose === 'disable') {
+        const { disabledVerified, message } = await authService.disableMfaEnrollment(mfaCode)
+        if (disabledVerified) {
+          setMfaEnabled(false)
+          setQrCodeUrl(null)
+          clearMfaQrDataUrl()
+          handleMfaCancel()
+          notify({
+            title: 'MFA disabled',
+            message: message || 'Multi-factor authentication is now disabled.',
+            variant: 'success',
+          })
+          return
+        }
+        setMfaError(message || 'Verification was not successful. Try again.')
+        return
+      }
+
+      const { verified, message } = await authService.verifyMfaCode(mfaCode)
+      if (verified) {
+        setMfaEnabled(true)
+        handleMfaCancel()
+        notify({
+          title: 'MFA enabled',
+          message: message || 'Multi-factor authentication is now active.',
+          variant: 'success',
+        })
+      } else {
+        setMfaError(message || 'Verification was not successful. Try again.')
+      }
+    } catch (err) {
+      setMfaError(err instanceof Error ? err.message : 'Verification failed.')
+    } finally {
+      setVerifyLoading(false)
+    }
   }
 
   const handleAvatarUpload = (file?: File | null) => {
@@ -58,13 +174,6 @@ export const Settings = () => {
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="space-y-4">
-          <h3 className="text-base font-semibold text-slate-900">Organization</h3>
-          <Input label="Company name" defaultValue="S&R Foods" />
-          <Input label="Default shipping warehouse" defaultValue="Diamond Fulfillment" />
-          <Button variant="secondary">Save organization settings</Button>
-        </Card>
-
         <Card className="space-y-4">
           <h3 className="text-base font-semibold text-slate-900">User preferences</h3>
           <div className="flex items-center gap-4 rounded-xl border border-slate-200 px-4 py-3">
@@ -121,6 +230,12 @@ export const Settings = () => {
             <option>45 minutes</option>
             <option>60 minutes</option>
           </Select>
+
+          <Button variant="secondary">Save preferences</Button>
+        </Card>
+
+        <Card className="space-y-4">
+          <h3 className="text-base font-semibold text-slate-900">Authenticator setup</h3>
           <div className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
             <div>
               <p className="text-sm font-semibold text-slate-700">Multi-factor authentication</p>
@@ -131,41 +246,66 @@ export const Settings = () => {
             <button
               type="button"
               onClick={handleMfaToggle}
-              className="relative inline-flex h-6 w-11 items-center rounded-full bg-slate-200 transition"
+              disabled={setupLoading}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition disabled:opacity-50 ${
+                mfaEnabled ? 'bg-emerald-500' : 'bg-slate-400'
+              }`}
               aria-pressed={mfaEnabled}
               aria-label="Toggle MFA"
             >
               <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
                   mfaEnabled ? 'translate-x-5' : 'translate-x-1'
                 }`}
               />
             </button>
           </div>
-          <Button variant="secondary">Save preferences</Button>
-        </Card>
 
-        <Card className="space-y-4">
-          <h3 className="text-base font-semibold text-slate-900">Authenticator setup</h3>
-          <p className="text-sm text-slate-500">
-            Scan the QR code with Google Authenticator or Microsoft Authenticator, then enter the
-            code on login when MFA is enabled.
-          </p>
-          <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <img
-              src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=otpauth://totp/S%26R%20Foods%3Aks%40srfoods.com%3Fsecret%3DIMSDEMO2026%26issuer%3DS%26R%20Foods"
-              alt="MFA setup QR code"
-              className="h-44 w-44 rounded-xl bg-white p-3"
-            />
-            <div className="text-xs text-slate-500">
-              <p className="font-semibold text-slate-700">Manual setup key</p>
-              <p className="mt-1 rounded-lg bg-white px-3 py-2 font-mono text-slate-700">
-                IMSDEMO2026
-              </p>
-              <p className="mt-2">Issuer: S&amp;R Foods</p>
-              <p>Account: ks@srfoods.com</p>
+          {showMfaSetupBlock && (
+            <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              {setupLoading && !qrCodeUrl ? (
+                <div className="flex items-center gap-4">
+                  <Loader2 className="h-10 w-10 shrink-0 animate-spin text-emerald-600" aria-hidden />
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">Preparing authenticator setup…</p>
+                    <p className="text-xs text-slate-500">This may take a few seconds.</p>
+                  </div>
+                </div>
+              ) : qrCodeUrl ? (
+                <>
+                  <p className="text-sm text-slate-500">
+                    Scan the QR code with Google Authenticator or Microsoft Authenticator, then click{' '}
+                    <span className="font-medium text-slate-700">Enter verification code</span> and
+                    enter the 6-digit code to finish enabling MFA.
+                  </p>
+                  <img
+                    src={qrCodeUrl}
+                    alt="MFA setup QR code"
+                    className="h-44 w-44 rounded-xl bg-white p-3"
+                  />
+                  {!showMfaModal && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setMfaModalPurpose('enroll')
+                        setMfaCode('')
+                        setMfaError('')
+                        setShowMfaModal(true)
+                      }}
+                    >
+                      Enter verification code
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  Multi-factor authentication is enabled. You will be asked for a code when you sign
+                  in.
+                </p>
+              )}
             </div>
-          </div>
+          )}
         </Card>
 
         <Card className="space-y-4 lg:col-span-2">
@@ -194,9 +334,13 @@ export const Settings = () => {
       {showMfaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900">Enable MFA</h3>
+            <h3 className="text-lg font-semibold text-slate-900">
+              {mfaModalPurpose === 'disable' ? 'Disable MFA' : 'Enable MFA'}
+            </h3>
             <p className="mt-1 text-sm text-slate-500">
-              Enter the 6-digit code from your authenticator app to enable MFA.
+              {mfaModalPurpose === 'disable'
+                ? 'Enter the 6-digit code from your authenticator app to confirm turning off multi-factor authentication.'
+                : 'Enter the 6-digit code from your authenticator app to enable MFA.'}
             </p>
             <div className="mt-4">
               <Input
@@ -211,11 +355,15 @@ export const Settings = () => {
               />
             </div>
             <div className="mt-6 flex justify-end gap-2">
-              <Button variant="secondary" type="button" onClick={handleMfaCancel}>
+              <Button variant="secondary" type="button" onClick={handleMfaCancel} disabled={verifyLoading}>
                 Cancel
               </Button>
-              <Button type="button" onClick={handleMfaVerify}>
-                Verify & Enable
+              <Button type="button" onClick={handleMfaVerify} disabled={verifyLoading}>
+                {verifyLoading
+                  ? 'Verifying...'
+                  : mfaModalPurpose === 'disable'
+                    ? 'Verify & Disable'
+                    : 'Verify & Enable'}
               </Button>
             </div>
           </div>

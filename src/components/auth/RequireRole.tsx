@@ -13,7 +13,7 @@ const roleWeight: Record<UserRole, number> = {
 
 export const RequireRole = ({ minRole }: { minRole: UserRole }) => {
   const user = useAuthStore((state) => state.user)
-  const allowed = user && roleWeight[user.role] >= roleWeight[minRole]
+  const allowed = user && roleWeight[user.roleAlt] >= roleWeight[minRole]
 
   if (!allowed) {
     return <Navigate to="/access-denied" replace />

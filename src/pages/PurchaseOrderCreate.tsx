@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useSuppliers, useWarehousesByLocation } from '../hooks/usePoQueries'
+import { useCountries, useSuppliers, useWarehousesByCountry } from '../hooks/usePoQueries'
 import { formatSupplierDetails, formatWarehouseDetails } from '../services/poService'
-import type { LocationCode, PurchaseOrderLineItem } from '../types/po'
+import type { PurchaseOrderLineItem } from '../types/po'
 import { createEmptyLineItem } from '../services/poService'
 import { Button } from '../components/common/Button'
 import { Card } from '../components/common/Card'
@@ -21,7 +21,7 @@ export const PurchaseOrderCreate = () => {
   const [poDate, setPoDate] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [deliveryDate, setDeliveryDate] = useState('')
-  const [location, setLocation] = useState<LocationCode | ''>('USA')
+  const [location, setLocation] = useState<string>('')
   const [warehouseId, setWarehouseId] = useState('')
   const [shippingMethod, setShippingMethod] = useState('')
   const [includeTax, setIncludeTax] = useState(true)
@@ -30,7 +30,14 @@ export const PurchaseOrderCreate = () => {
   const [dateErrors, setDateErrors] = useState<{ due?: string; delivery?: string }>({})
 
   const suppliersQuery = useSuppliers()
-  const warehousesQuery = useWarehousesByLocation(location || 'USA')
+  const countriesQuery = useCountries()
+  const warehousesQuery = useWarehousesByCountry(location || '')
+
+  useEffect(() => {
+    if (!location && countriesQuery.data?.length) {
+      setLocation(countriesQuery.data[0].countryName)
+    }
+  }, [countriesQuery.data, location])
 
   const selectedSupplier = useMemo(
     () => suppliersQuery.data?.find((s) => s.id === supplierId) ?? null,
@@ -63,8 +70,7 @@ export const PurchaseOrderCreate = () => {
   }
 
   const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value as LocationCode | ''
-    setLocation(value || 'USA')
+    setLocation(e.target.value)
     setWarehouseId('')
   }
 
@@ -75,7 +81,11 @@ export const PurchaseOrderCreate = () => {
     navigate('/purchase-orders')
   }
 
-  const currency = location === 'CAN' ? 'CAD' : 'USD'
+  const currency = location === 'Canada' ? 'CAD' : 'USD'
+  const selectedCountryCode = useMemo(() => {
+    const match = countriesQuery.data?.find((c) => c.countryName === location)
+    return match?.countryCode?.trim() || null
+  }, [countriesQuery.data, location])
 
   return (
     <div className="space-y-6">
@@ -96,7 +106,7 @@ export const PurchaseOrderCreate = () => {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Section 1: Supplier Information */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <h2 className="mb-4 text-lg font-semibold text-[rgb(var(--text))]">
             Supplier Information
           </h2>
@@ -109,7 +119,7 @@ export const PurchaseOrderCreate = () => {
               onSelect={() => {}}
             />
             <div />
-            <div className="md:col-span-2 grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="md:col-span-2 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
               <Textarea
                 label="Supplier Details"
                 value={supplierDetails}
@@ -130,9 +140,9 @@ export const PurchaseOrderCreate = () => {
         </Card>
 
         {/* Section 2: PO Dates */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <h2 className="mb-4 text-lg font-semibold text-[rgb(var(--text))]">PO Dates</h2>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Input
               label="PO Date"
               type="date"
@@ -163,7 +173,7 @@ export const PurchaseOrderCreate = () => {
         </Card>
 
         {/* Section 3: Location & Warehouse */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <h2 className="mb-4 text-lg font-semibold text-[rgb(var(--text))]">
             Location &amp; Warehouse
           </h2>
@@ -172,10 +182,22 @@ export const PurchaseOrderCreate = () => {
               label="Location"
               value={location}
               onChange={handleLocationChange}
+              disabled={countriesQuery.isLoading}
             >
-              <option value="USA">USA</option>
-              <option value="CAN">CAN</option>
+              {countriesQuery.data?.map((country) => (
+                <option key={country.countryCode} value={country.countryName}>
+                  {country.countryName}
+                </option>
+              ))}
             </Select>
+            {countriesQuery.isError && (
+              <ErrorState
+                title="Failed to load countries"
+                description="Please try again."
+                onRetry={() => countriesQuery.refetch()}
+                compact
+              />
+            )}
             <WarehouseDropdown
               warehouses={warehousesQuery.data}
               isLoading={warehousesQuery.isLoading}
@@ -183,7 +205,7 @@ export const PurchaseOrderCreate = () => {
               onChange={setWarehouseId}
             />
             <div />
-            <div className="md:col-span-2 grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="md:col-span-2 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
               <Textarea
                 label="Warehouse Details"
                 value={warehouseDetails}
@@ -204,7 +226,7 @@ export const PurchaseOrderCreate = () => {
         </Card>
 
         {/* Section 4: Shipping */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <h2 className="mb-4 text-lg font-semibold text-[rgb(var(--text))]">Shipping</h2>
           <Input
             label="Shipping Method"
@@ -215,7 +237,7 @@ export const PurchaseOrderCreate = () => {
         </Card>
 
         {/* Section 5: Tax Option */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <h2 className="mb-4 text-lg font-semibold text-[rgb(var(--text))]">Tax Option</h2>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6 max-w-xl">
             <div className="flex-1">
@@ -247,21 +269,30 @@ export const PurchaseOrderCreate = () => {
         </Card>
 
         {/* Section 6–8: Item Details Table & Totals */}
-        <Card className="p-6">
-          <ItemTable
+        <Card className="p-4 sm:p-6">
+            <ItemTable
             items={items}
             onChange={setItems}
             currency={currency}
             includeTax={includeTax}
             taxRate={taxRate}
+              supplierId={supplierId}
+              countryCode={selectedCountryCode}
           />
         </Card>
 
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" type="button" onClick={() => navigate('/purchase-orders')}>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => navigate('/purchase-orders')}
+            className="w-full sm:w-auto"
+          >
             Cancel
           </Button>
-          <Button type="submit">Save Purchase Order</Button>
+          <Button type="submit" className="w-full sm:w-auto">
+            Save Purchase Order
+          </Button>
         </div>
       </form>
     </div>

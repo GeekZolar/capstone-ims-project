@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useMemo, useState, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type { PurchaseOrderLineItem, ItemTableColumnKey } from '../../types/po'
 import { createEmptyLineItem, computeLineAmount } from '../../services/poService'
 import { Table, TableCell, TableHeader, TableRow } from '../common/Table'
@@ -9,8 +10,10 @@ import { ExportExcelButton } from './ExportExcelButton'
 import { PasteItemButton } from './PasteItemButton'
 import { ItemRow } from './ItemRow'
 import { Settings } from 'lucide-react'
+import { utilityService } from '../../services/utilityService'
 
 const DEFAULT_VISIBLE_COLUMNS: Set<ItemTableColumnKey> = new Set([
+  'sku',
   'productName',
   'description',
   'quantity',
@@ -25,6 +28,9 @@ interface ItemTableProps {
   includeTax?: boolean
   taxRate?: number
   readOnly?: boolean
+  supplierId?: string
+  /** Filter products by backend countryCode (e.g. US, CA) from Location dropdown selection. */
+  countryCode?: string | null
 }
 
 export function ItemTable({
@@ -34,16 +40,69 @@ export function ItemTable({
   includeTax = false,
   taxRate = 0,
   readOnly,
+  supplierId,
+  countryCode,
 }: ItemTableProps) {
   const [visibleColumns, setVisibleColumns] = useState<Set<ItemTableColumnKey>>(DEFAULT_VISIBLE_COLUMNS)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+
+  const productsQuery = useQuery({
+    queryKey: ['po', 'utility-products'],
+    queryFn: () => utilityService.getProducts(),
+  })
+
+  const products = useMemo(() => {
+    const rows = productsQuery.data ?? []
+    let filtered = rows.filter((p) => p.isActive !== false)
+    if (countryCode) {
+      filtered = filtered.filter((p) => String(p.countryCode).toUpperCase() === String(countryCode).toUpperCase())
+    }
+    if (supplierId) {
+      filtered = filtered.filter((p) => String(p.supplierId) === String(supplierId))
+    }
+    return filtered
+  }, [productsQuery.data, supplierId, countryCode])
+
+  const productBySku = useMemo(() => {
+    const map = new Map<string, (typeof products)[number]>()
+    for (const p of products) {
+      if (p.sku) map.set(String(p.sku).trim(), p)
+    }
+    return map
+  }, [products])
+
+  const productByName = useMemo(() => {
+    const map = new Map<string, (typeof products)[number]>()
+    for (const p of products) {
+      if (p.productName) map.set(`${String(p.productName).trim().toLowerCase()}-${String(p.productSize?.toLowerCase() ?? '')}`, p)
+    }
+    return map
+  }, [products])
 
   const updateItem = useCallback(
     (id: string, patch: Partial<PurchaseOrderLineItem>) => {
       onChange(
         items.map((it) => {
           if (it.id !== id) return it
-          const next = { ...it, ...patch }
+          const next: PurchaseOrderLineItem = { ...it, ...patch }
+
+          // Auto-bind product fields from backend utility/products.
+          if (typeof patch.sku === 'string') {
+            const sku = patch.sku.trim()
+            const p = sku ? productBySku.get(sku) : undefined
+            if (p) {
+              next.productName = p.productName ?? next.productName
+              next.description = (p.description ?? '') as string
+            }
+          }
+          if (typeof patch.productName === 'string') {
+            const key = patch.productName.trim().toLowerCase()
+            const p = key ? productByName.get(key) : undefined
+            if (p) {
+              next.sku = p.sku ?? next.sku
+              next.description = (p.description ?? '') as string
+            }
+          }
           if (typeof patch.quantity === 'number' || typeof patch.rate === 'number') {
             next.amount = computeLineAmount(next.quantity, next.rate)
           }
@@ -51,7 +110,7 @@ export function ItemTable({
         }),
       )
     },
-    [items, onChange],
+    [items, onChange, productByName, productBySku],
   )
 
   const addLine = useCallback(() => {
@@ -141,8 +200,12 @@ export function ItemTable({
                   <TableCell className="w-8 text-xs font-semibold text-slate-500"></TableCell>
                 )}
                 <TableCell className="w-10 text-xs font-semibold text-slate-500">No.</TableCell>
+                
                 {visibleColumns.has('productName') && (
                   <TableCell className="text-xs font-semibold text-slate-500">Product Name</TableCell>
+                )}
+                {visibleColumns.has('sku') && (
+                  <TableCell className="text-xs font-semibold text-slate-500">SKU</TableCell>
                 )}
                 {visibleColumns.has('description') && (
                   <TableCell className="text-xs font-semibold text-slate-500">Description</TableCell>
@@ -172,6 +235,7 @@ export function ItemTable({
                   onUpdate={updateItem}
                   onCopy={copyLine}
                   onDelete={deleteLine}
+                  products={products}
                   onDragStart={handleDragStart}
                   onDragOver={() => {}}
                   onDrop={handleDrop}

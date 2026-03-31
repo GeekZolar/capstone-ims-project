@@ -4,6 +4,7 @@ import { Button } from '../common/Button'
 import { Card } from '../common/Card'
 
 const COLUMN_LABELS: Record<ItemTableColumnKey, string> = {
+  sku: 'SKU',
   productName: 'Product Name',
   description: 'Description',
   quantity: 'Quantity',

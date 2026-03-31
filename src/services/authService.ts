@@ -1,5 +1,5 @@
 import getApiConfig from '../config/api.config'
-import type { UserProfile, UserRole } from '../types/ims'
+import { coerceUserRole, roleDisplayName, type UserProfile, type UserRole } from '../types/ims'
 
 /** Request body for the login API */
 export interface LoginPayload {
@@ -14,7 +14,9 @@ export interface ApiLoginUser {
   email: string
   firstName: string
   lastName: string
-  role: UserRole
+  role?: UserRole
+  roleAlt?: UserRole
+  roleName?: string
   permissions: {
     roles?: string[]
     users?: string[]
@@ -31,7 +33,12 @@ export interface ApiLoginResponse {
   refreshToken: string
   mfaToken?: string
   expiresIn: number
+  /** True when the user must enter an MFA code before login completes (login challenge). */
   mfaRequired: boolean
+  /** True when MFA is enrolled/enabled for the account (Settings toggle / session). */
+  mfaEnabled?: boolean
+  /** True when the user must change their password before using the app. */
+  isDefaultPassword?: boolean
   user: ApiLoginUser | null
   message?: string
 }
@@ -43,8 +50,27 @@ export interface LoginResponse {
   mfaToken: string
   expiresIn: number
   mfaRequired: boolean
+  mfaEnabled: boolean
+  isDefaultPassword: boolean
   user: UserProfile | null
   message?: string
+}
+
+function readIsDefaultPassword(data: ApiLoginResponse, dataRaw: Record<string, unknown>): boolean {
+  return Boolean(
+    data.isDefaultPassword ??
+      dataRaw['isDefaultPassword'] ??
+      dataRaw['is_default_password'] ??
+      dataRaw['IsDefaultPassword'],
+  )
+}
+
+function getAuthHeaders(): HeadersInit {
+  const token = sessionStorage.getItem('ims_token')
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
 }
 
 function mapApiUserToProfile(apiUser: ApiLoginUser | undefined | null): UserProfile {
@@ -56,12 +82,24 @@ function mapApiUserToProfile(apiUser: ApiLoginUser | undefined | null): UserProf
   const last = apiUser.lastName ?? raw['last_name']
   const name = ([first, last].filter(Boolean).join(' ') || apiUser.username) ?? ''
   const userId = apiUser.userId ?? raw['userId']
-  const role = apiUser.role ?? raw['role']
+  const roleAltRaw =
+    raw['roleAlt'] ??
+    raw['role_alt'] ??
+    apiUser.roleAlt ??
+    apiUser.role ??
+    raw['role']
+  const roleAlt = coerceUserRole(roleAltRaw)
+  const roleNameRaw = raw['roleName'] ?? raw['role_name'] ?? apiUser.roleName
+  const roleName =
+    typeof roleNameRaw === 'string' && roleNameRaw.trim()
+      ? roleNameRaw.trim()
+      : roleDisplayName(roleAlt)
   return {
     id: String(userId ?? ''),
     name: String(name || 'User'),
     email: String(apiUser.email ?? ''),
-    role: (role as UserRole) ?? 'read_only',
+    roleAlt,
+    roleName,
   }
 }
 
@@ -97,12 +135,19 @@ export const authService = {
     const user =
       rawUser != null ? mapApiUserToProfile(rawUser as ApiLoginUser) : null
 
+    const mfaEnabled = Boolean(
+      data.mfaEnabled ?? dataRaw['mfa_enabled'] ?? dataRaw['MfaEnabled'],
+    )
+    const isDefaultPassword = readIsDefaultPassword(data, dataRaw)
+
     return {
       token: data.accessToken ?? '',
       refreshToken: data.refreshToken ?? '',
       mfaToken: data.mfaToken ?? (dataRaw['mfaToken'] as string) ?? '',
       expiresIn: data.expiresIn ?? 0,
       mfaRequired: data.mfaRequired ?? false,
+      mfaEnabled,
+      isDefaultPassword,
       user,
       message: data.message ?? dataRaw['message'] as string | undefined,
     }
@@ -139,14 +184,158 @@ export const authService = {
       throw new Error('MFA verification response missing user data')
     }
 
+    const mfaEnabled = Boolean(
+      data.mfaEnabled ?? dataRaw['mfa_enabled'] ?? dataRaw['MfaEnabled'],
+    )
+    const isDefaultPassword = readIsDefaultPassword(data, dataRaw)
+
     return {
       token: data.accessToken ?? '',
       refreshToken: data.refreshToken ?? '',
       mfaToken: data.mfaToken ?? '',
       expiresIn: data.expiresIn ?? 0,
-      mfaRequired: false,
+      mfaRequired: data.mfaRequired ?? false,
+      mfaEnabled,
+      isDefaultPassword,
       user: mapApiUserToProfile(rawUser as ApiLoginUser),
       message: data.message,
     }
+  },
+
+  /**
+   * Start MFA enrollment for the signed-in user (Settings).
+   * POST body: { emailAddress }
+   * Response: { qrCodeUrl, mfaEnabled }
+   */
+  async setupMfa(emailAddress: string): Promise<{ qrCodeUrl: string; mfaEnabled: boolean }> {
+    const config = getApiConfig()
+    const baseUrl = (config.baseUrl ?? '').replace(/\/$/, '')
+    const rawPath = config.mfaSetupEndpoint ?? '/auth/mfa/setup'
+    const path = rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+    const url = `${baseUrl}${path}`
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ emailAddress }),
+    })
+
+    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>
+    if (!response.ok) {
+      const message =
+        typeof body?.message === 'string'
+          ? body.message
+          : (body?.error as string) ?? `MFA setup failed (${response.status})`
+      throw new Error(message)
+    }
+
+    // Often a data URI: data:image/png;base64,... (works as <img src={...} />)
+    const qrCodeUrl = String(body.qrCodeUrl ?? body.qr_code_url ?? '').trim()
+    const mfaEnabled = Boolean(body.mfaEnabled ?? body.mfa_enabled)
+    return { qrCodeUrl, mfaEnabled }
+  },
+
+  /**
+   * Confirm MFA enrollment with a TOTP code (Settings).
+   * POST body: { code }
+   * Response: { verified, message }
+   */
+  async verifyMfaCode(code: string): Promise<{ verified: boolean; message: string }> {
+    const config = getApiConfig()
+    const baseUrl = (config.baseUrl ?? '').replace(/\/$/, '')
+    const rawPath = config.mfaVerifyEndpoint ?? '/auth/mfa/verify'
+    const path = rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+    const url = `${baseUrl}${path}`
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ code }),
+    })
+
+    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>
+    if (!response.ok) {
+      const message =
+        typeof body?.message === 'string'
+          ? body.message
+          : (body?.error as string) ?? `MFA verification failed (${response.status})`
+      throw new Error(message)
+    }
+
+    const verified = Boolean(body.verified)
+    const message = typeof body.message === 'string' ? body.message : String(body.message ?? '')
+    return { verified, message }
+  },
+
+  /**
+   * Disable MFA enrollment with a TOTP code (Settings).
+   * POST body: { code }
+   */
+  async disableMfaEnrollment(code: string): Promise<{ disabledVerified: boolean; message: string }> {
+    const config = getApiConfig()
+    const baseUrl = (config.baseUrl ?? '').replace(/\/$/, '')
+    const rawPath = config.mfaDisableEndpoint ?? '/auth/mfa/verify-disable'
+    const path = rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+    const url = `${baseUrl}${path}`
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ code }),
+    })
+
+    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>
+    if (!response.ok) {
+      const message =
+        typeof body?.message === 'string'
+          ? body.message
+          : (body?.error as string) ?? `MFA enrollment disable failed (${response.status})`
+      throw new Error(message)
+    }
+
+    const disabledVerified = Boolean(
+      body.disabled_verfied ?? body.disabledVerified ?? body.disabled ?? body.verified,
+    )
+    const message = typeof body.message === 'string' ? body.message : String(body.message ?? '')
+    return { disabledVerified, message }
+  },
+
+  /**
+   * Change password for the signed-in user (e.g. after default/temporary password login).
+   * POST body: { currentPassword, newPassword, confirmPassword }
+   */
+  async changePassword(payload: {
+    currentPassword: string
+    newPassword: string
+    confirmPassword: string
+  }): Promise<{ message: string }> {
+    const config = getApiConfig()
+    const baseUrl = (config.baseUrl ?? '').replace(/\/$/, '')
+    const rawPath = config.changePasswordEndpoint ?? '/users/change-password'
+    const path = rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+    const url = `${baseUrl}${path}`
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        currentPassword: payload.currentPassword,
+        newPassword: payload.newPassword,
+        confirmPassword: payload.confirmPassword,
+      }),
+    })
+
+    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>
+    if (!response.ok) {
+      const message =
+        typeof body?.message === 'string'
+          ? body.message
+          : (body?.error as string) ?? `Password change failed (${response.status})`
+      throw new Error(message)
+    }
+
+    const message =
+      typeof body.message === 'string' ? body.message : 'Password changed successfully'
+    return { message }
   },
 }

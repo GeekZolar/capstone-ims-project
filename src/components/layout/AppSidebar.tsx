@@ -44,7 +44,7 @@ export const AppSidebar = () => {
           .filter((item) => {
             if (!item.minRole) return true
             if (!user) return false
-            return roleWeight[user.role] >= roleWeight[item.minRole]
+            return roleWeight[user.roleAlt] >= roleWeight[item.minRole]
           })
           .map((item) => {
           const Icon = item.icon

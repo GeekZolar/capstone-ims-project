@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import type { PurchaseOrderLineItem } from '../../types/po'
+import type { ProductUtilityRecord, PurchaseOrderLineItem } from '../../types/po'
 import type { ItemTableColumnKey } from '../../types/po'
 import { Input } from '../common/Input'
+import { Textarea } from '../common/Textarea'
 import { TableCell, TableRow } from '../common/Table'
 import { formatCurrency } from '../../utils/format'
 
@@ -13,6 +14,7 @@ interface ItemRowProps {
   onUpdate: (id: string, patch: Partial<PurchaseOrderLineItem>) => void
   onCopy: (item: PurchaseOrderLineItem) => void
   onDelete: (id: string) => void
+  products?: ProductUtilityRecord[]
   onDragStart?: (index: number) => void
   onDragOver?: (index: number) => void
   onDrop?: (index: number) => void
@@ -28,6 +30,7 @@ export function ItemRow({
   onUpdate,
   onCopy,
   onDelete,
+  products,
   onDragStart,
   onDragOver,
   onDrop,
@@ -44,6 +47,11 @@ export function ItemRow({
   const handleRateChange = (value: number) => {
     onUpdate(item.id, { rate: value, amount: Math.round(item.quantity * value * 100) / 100 })
   }
+
+  const selectedProduct =
+    products?.find((p) => String(p.sku).trim() === String(item.sku).trim()) ??
+    products?.find((p) => String(p.productName).trim().toLowerCase() === String(item.productName).trim().toLowerCase()) ??
+    null
 
   return (
     <TableRow
@@ -85,11 +93,43 @@ export function ItemRow({
           {readOnly ? (
             item.productName
           ) : (
+            <select
+              className="min-w-[220px] w-full rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--text))] focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200"
+              value={selectedProduct?.productId ?? ''}
+              onChange={(e) => {
+                const id = e.target.value
+                const p = products?.find((x) => x.productId === id)
+                if (!p) return
+                onUpdate(item.id, {
+                  productName: p.productName ?? '',
+                  sku: p.sku ?? '',
+                  description: p.description ?? '',
+                  quantity: typeof p.minOrderPallet === 'number' ? p.minOrderPallet : 0,
+                })
+              }}
+            >
+              <option value="" disabled>
+                Select product...
+              </option>
+              {(products ?? []).map((p) => (
+                <option key={p.productId} value={p.productId}>
+                  {p.productSize ? `${p.productName} - ${p.productSize}` : p.productName}
+                </option>
+              ))}
+            </select>
+          )}
+        </TableCell>
+      )}
+      {visibleColumns.has('sku') && (
+        <TableCell>
+          {readOnly ? (
+            item.sku
+          ) : (
             <Input
-              value={item.productName}
-              onChange={(e) => onUpdate(item.id, { productName: e.target.value })}
-              placeholder="Product name"
-              className="min-w-[140px]"
+              value={item.sku}
+              onChange={(e) => onUpdate(item.id, { sku: e.target.value })}
+              placeholder="SKU"
+              className="min-w-[120px]"
             />
           )}
         </TableCell>
@@ -99,11 +139,12 @@ export function ItemRow({
           {readOnly ? (
             item.description
           ) : (
-            <Input
+            <Textarea
               value={item.description}
               onChange={(e) => onUpdate(item.id, { description: e.target.value })}
               placeholder="Description"
-              className="min-w-[160px]"
+              className="min-w-[220px] min-h-[44px] max-h-[120px]"
+              rows={2}
             />
           )}
         </TableCell>

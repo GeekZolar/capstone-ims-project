@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/authStore'
 import { Button } from '../components/common/Button'
 import { Input } from '../components/common/Input'
 import { useToast } from '../components/common/Toast'
+import { CHANGE_PASSWORD_CURRENT_KEY } from '../store/authStore'
 
 const schema = z.object({
   username: z.string().min(2, 'Enter a username'),
@@ -20,11 +21,15 @@ export const Login = () => {
   const navigate = useNavigate()
   const login = useAuthStore((state) => state.login)
   const { notify } = useToast()
+  const [showLoginErrorModal, setShowLoginErrorModal] = useState(false)
+  const [loginErrorMessage, setLoginErrorMessage] = useState('')
   const [pendingMfa, setPendingMfa] = useState<{ mfaToken: string } | null>(null)
   const [showMfaModal, setShowMfaModal] = useState(false)
   const [mfaCode, setMfaCode] = useState('')
   const [mfaError, setMfaError] = useState('')
   const [mfaSubmitting, setMfaSubmitting] = useState(false)
+  /** Password from the sign-in form (needed after MFA and for default-password redirect). */
+  const pendingPasswordRef = useRef<string | null>(null)
 
   const {
     register,
@@ -35,8 +40,29 @@ export const Login = () => {
     defaultValues: { username: '', password: '' },
   })
 
-  const completeLogin = (user: NonNullable<Awaited<ReturnType<typeof authService.login>>['user']>, token: string) => {
-    login(user, token)
+  const completeLogin = (
+    user: NonNullable<Awaited<ReturnType<typeof authService.login>>['user']>,
+    token: string,
+    mfaEnabled?: boolean,
+    options?: { isDefaultPassword?: boolean; passwordUsed?: string },
+  ) => {
+    const mustChange = Boolean(options?.isDefaultPassword)
+    const pwd = options?.passwordUsed ?? pendingPasswordRef.current ?? ''
+    if (mustChange && pwd) {
+      sessionStorage.setItem(CHANGE_PASSWORD_CURRENT_KEY, pwd)
+    }
+    login(user, token, mfaEnabled ?? false, mustChange)
+
+    if (mustChange) {
+      notify({
+        title: 'New password required',
+        message: 'Set a new password to continue.',
+        variant: 'info',
+      })
+      navigate('/change-password', { replace: true })
+      return
+    }
+
     notify({
       title: 'Welcome back',
       message: `Signed in as ${user.name}.`,
@@ -46,14 +72,25 @@ export const Login = () => {
   }
 
   const onSubmit = async (values: LoginForm) => {
-    const response = await authService.login(values)
-    if (response.mfaRequired && response.mfaToken) {
-      setPendingMfa({ mfaToken: response.mfaToken })
-      setShowMfaModal(true)
-      return
-    }
-    if (response.user != null) {
-      completeLogin(response.user, response.token)
+    pendingPasswordRef.current = values.password
+    setLoginErrorMessage('')
+    setShowLoginErrorModal(false)
+    try {
+      const response = await authService.login(values)
+      if (response.mfaRequired && response.mfaToken) {
+        setPendingMfa({ mfaToken: response.mfaToken })
+        setShowMfaModal(true)
+        return
+      }
+      if (response.user != null) {
+        completeLogin(response.user, response.token, response.mfaEnabled, {
+          isDefaultPassword: response.isDefaultPassword,
+          passwordUsed: values.password,
+        })
+      }
+    } catch (err) {
+      setLoginErrorMessage(err instanceof Error ? err.message : 'Login failed')
+      setShowLoginErrorModal(true)
     }
   }
 
@@ -75,7 +112,10 @@ export const Login = () => {
     try {
       const response = await authService.verifyMfa(pendingMfa.mfaToken, mfaCode)
       if (response.user != null) {
-        completeLogin(response.user, response.token)
+        completeLogin(response.user, response.token, response.mfaEnabled, {
+          isDefaultPassword: response.isDefaultPassword,
+          passwordUsed: pendingPasswordRef.current ?? undefined,
+        })
         handleMfaCancel()
       }
     } catch (err) {
@@ -171,6 +211,29 @@ export const Login = () => {
               </Button>
               <Button type="button" onClick={handleMfaVerify} disabled={mfaSubmitting}>
                 {mfaSubmitting ? 'Verifying...' : 'Verify'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLoginErrorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">Login failed</h3>
+            <p className="mt-2 whitespace-pre-line text-sm text-slate-600">
+              {loginErrorMessage || 'Invalid credentials'}
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setShowLoginErrorModal(false)
+                  setLoginErrorMessage('')
+                }}
+              >
+                Close
               </Button>
             </div>
           </div>

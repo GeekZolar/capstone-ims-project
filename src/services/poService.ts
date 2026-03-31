@@ -8,11 +8,6 @@ import type {
 } from '../types/po'
 
 export const poService = {
-  async getSuppliers(): Promise<Supplier[]> {
-    const { data } = await apiClient.get<Supplier[]>('/suppliers')
-    return data ?? []
-  },
-
   async getWarehouses(location: LocationCode): Promise<WarehouseApi[]> {
     const { data } = await apiClient.get<WarehouseApi[]>('/warehouses', {
       params: { location },
@@ -40,9 +35,20 @@ export const poService = {
   },
 }
 
-/** Format supplier for display in read-only text area */
+/** Format supplier for display in read-only text area (utility API order when available). */
 export function formatSupplierDetails(supplier: Supplier | null | undefined): string {
   if (!supplier) return ''
+  if (supplier.utilitySource) {
+    const u = supplier.utilitySource
+    return [
+      u.supplierName.trim(),
+      u.address.trim(),
+      u.location.trim(),
+      u.contactName.trim(),
+      u.contactEmail.trim(),
+      u.contactPhone.trim(),
+    ].join('\n')
+  }
   const { companyName, address, phone } = supplier
   const lines = [
     companyName,
@@ -57,6 +63,12 @@ export function formatSupplierDetails(supplier: Supplier | null | undefined): st
 /** Format warehouse for display in read-only text area */
 export function formatWarehouseDetails(warehouse: WarehouseApi | null | undefined): string {
   if (!warehouse) return ''
+  if (warehouse.utilitySource) {
+    const u = warehouse.utilitySource
+    // Required order: name, address, location
+    return [u.name.trim(), u.address.trim(), u.location.trim()].join('\n')
+  }
+
   const { companyName, address, phone } = warehouse
   const lines = [
     companyName,
@@ -72,6 +84,7 @@ export function createEmptyLineItem(id?: string): PurchaseOrderLineItem {
   const uid = id ?? `line-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
   return {
     id: uid,
+    sku: '',
     productName: '',
     description: '',
     quantity: 0,

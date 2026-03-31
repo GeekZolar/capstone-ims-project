@@ -26,12 +26,14 @@ function parsePastedItems(rows: string[][]): PurchaseOrderLineItem[] {
     return index >= 0 ? index : -1
   }
   const productIdx = idx('productname') >= 0 ? idx('productname') : idx('product') >= 0 ? idx('product') : 1
+  const skuIdx = idx('sku') >= 0 ? idx('sku') : 1
   const descIdx = idx('description') >= 0 ? idx('description') : 2
   const qtyIdx = idx('quantity') >= 0 ? idx('quantity') : 3
   const rateIdx = idx('rate') >= 0 ? idx('rate') : 4
   const amountIdx = idx('amount') >= 0 ? idx('amount') : 5
 
   dataRows.forEach((row) => {
+    const sku = row[skuIdx] ?? ''
     const productName = row[productIdx] ?? ''
     const description = row[descIdx] ?? ''
     const quantity = Number.parseFloat(String(row[qtyIdx] ?? 0).replace(/,/g, '')) || 0
@@ -44,6 +46,7 @@ function parsePastedItems(rows: string[][]): PurchaseOrderLineItem[] {
 
     items.push({
       ...createEmptyLineItem(),
+      sku,
       productName,
       description,
       quantity,

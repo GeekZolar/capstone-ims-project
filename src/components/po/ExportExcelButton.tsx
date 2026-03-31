@@ -11,6 +11,7 @@ export function ExportExcelButton({ items, disabled, children }: ExportExcelButt
   const handleExport = () => {
     const rows = items.map((item, index) => ({
       No: index + 1,
+      SKU: item.sku,
       'Product Name': item.productName,
       Description: item.description,
       Quantity: item.quantity,
