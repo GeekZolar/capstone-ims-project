@@ -29,6 +29,14 @@ export interface CountryUtilityRecord {
   createdAt: string
 }
 
+/** Category from GET /utility/categories */
+export interface CategoryUtilityRecord {
+  categoryId: string
+  categoryName: string
+  createdAt: string
+  modifiedDate: string | null
+}
+
 /** Supplier for PO forms (dropdown + details); may originate from utility/suppliers */
 export interface Supplier {
   id: string
@@ -86,6 +94,8 @@ export type LocationCode = 'USA' | 'CAN'
 /** Line item in PO create/edit form */
 export interface PurchaseOrderLineItem {
   id: string
+  /** Utility product id from GET /utility/products */
+  productId?: string
   sku: string
   productName: string
   description: string
@@ -103,11 +113,31 @@ export type ItemTableColumnKey =
   | 'rate'
   | 'amount'
 
+/** Summary row from GET /api/v1/purchase-orders */
+export interface PurchaseOrderListItem {
+  id: string
+  poNumber?: string
+  supplierId?: string
+  /** Display name when API returns it */
+  supplierName?: string
+  warehouseId?: string
+  warehouseName?: string
+  status: string
+  orderDate: string
+  expectedDeliveryDate: string
+  totalValue: number
+  currency: 'USD' | 'CAD'
+  /** When the list endpoint returns full PO objects (incl. lines). */
+  detail?: PurchaseOrderDetail
+}
+
 /** Full PO detail from GET /api/purchase-orders/:id (for approval page) */
 export interface PurchaseOrderDetail {
   id: string
   poNumber?: string
   supplierId: string
+  /** Flat name from API when nested supplier is absent */
+  supplierName?: string
   supplier?: Supplier
   supplierDetails?: string
   poDate: string
@@ -115,13 +145,17 @@ export interface PurchaseOrderDetail {
   deliveryDate: string
   location: LocationCode
   warehouseId: string
+  warehouseName?: string
   warehouse?: WarehouseApi
   warehouseDetails?: string
   shippingMethod: string
   includeTax: boolean
+  taxRate?: number
+  notes?: string
   items: PurchaseOrderLineItem[]
   subtotal: number
   taxAmount?: number
   totalAmount: number
+  currency?: 'USD' | 'CAD'
   status?: string
 }

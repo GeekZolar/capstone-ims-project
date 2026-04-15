@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { PurchaseOrderLineItem, ItemTableColumnKey } from '../../types/po'
 import { createEmptyLineItem, computeLineAmount } from '../../services/poService'
@@ -31,6 +31,10 @@ interface ItemTableProps {
   supplierId?: string
   /** Filter products by backend countryCode (e.g. US, CA) from Location dropdown selection. */
   countryCode?: string | null
+  /** When embedded in a page section that already has a heading. */
+  showTitle?: boolean
+  /** Show a bottom horizontal scrollbar on small screens. */
+  mobileBottomScrollbar?: boolean
 }
 
 export function ItemTable({
@@ -42,9 +46,14 @@ export function ItemTable({
   readOnly,
   supplierId,
   countryCode,
+  showTitle = true,
+  mobileBottomScrollbar = false,
 }: ItemTableProps) {
   const [visibleColumns, setVisibleColumns] = useState<Set<ItemTableColumnKey>>(DEFAULT_VISIBLE_COLUMNS)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const tableScrollRef = useRef<HTMLDivElement | null>(null)
+  const bottomScrollRef = useRef<HTMLDivElement | null>(null)
+  const bottomInnerRef = useRef<HTMLDivElement | null>(null)
 
   const productsQuery = useQuery({
     queryKey: ['po', 'utility-products'],
@@ -91,6 +100,7 @@ export function ItemTable({
             const sku = patch.sku.trim()
             const p = sku ? productBySku.get(sku) : undefined
             if (p) {
+              next.productId = p.productId ?? next.productId
               next.productName = p.productName ?? next.productName
               next.description = (p.description ?? '') as string
             }
@@ -99,6 +109,7 @@ export function ItemTable({
             const key = patch.productName.trim().toLowerCase()
             const p = key ? productByName.get(key) : undefined
             if (p) {
+              next.productId = p.productId ?? next.productId
               next.sku = p.sku ?? next.sku
               next.description = (p.description ?? '') as string
             }
@@ -171,11 +182,61 @@ export function ItemTable({
   const taxAmount = includeTax ? Math.round(subtotal * taxRate * 100) / 100 : 0
   const total = subtotal + taxAmount
 
+  useEffect(() => {
+    if (!mobileBottomScrollbar) return
+    const tableEl = tableScrollRef.current
+    const bottomEl = bottomScrollRef.current
+    const innerEl = bottomInnerRef.current
+    if (!tableEl || !bottomEl || !innerEl) return
+
+    const syncSize = () => {
+      innerEl.style.width = `${tableEl.scrollWidth}px`
+      bottomEl.scrollLeft = tableEl.scrollLeft
+    }
+
+    let ignore = 0
+    const onTableScroll = () => {
+      if (ignore === 2) {
+        ignore = 0
+        return
+      }
+      ignore = 1
+      bottomEl.scrollLeft = tableEl.scrollLeft
+    }
+    const onBottomScroll = () => {
+      if (ignore === 1) {
+        ignore = 0
+        return
+      }
+      ignore = 2
+      tableEl.scrollLeft = bottomEl.scrollLeft
+    }
+
+    tableEl.addEventListener('scroll', onTableScroll, { passive: true })
+    bottomEl.addEventListener('scroll', onBottomScroll, { passive: true })
+
+    const ro = new ResizeObserver(syncSize)
+    ro.observe(tableEl)
+    syncSize()
+
+    window.addEventListener('resize', syncSize, { passive: true })
+    return () => {
+      tableEl.removeEventListener('scroll', onTableScroll)
+      bottomEl.removeEventListener('scroll', onBottomScroll)
+      window.removeEventListener('resize', syncSize)
+      ro.disconnect()
+    }
+  }, [items.length, mobileBottomScrollbar, visibleColumns])
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-[rgb(var(--text))]">Item Details</h3>
-        <div className="flex items-center gap-1">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        {showTitle ? (
+          <h3 className="text-sm font-semibold text-[rgb(var(--text))]">Item Details</h3>
+        ) : (
+          <div aria-hidden />
+        )}
+        <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
           <ExportExcelButton items={items} disabled={items.length === 0} />
           <PasteItemButton onPaste={handlePaste} disabled={readOnly} />
           <ColumnCustomizer
@@ -191,9 +252,9 @@ export function ItemTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div ref={tableScrollRef} className="overflow-x-auto">
         <Table>
-          <table className="w-full text-left">
+          <table className="w-full min-w-[980px] text-left">
             <TableHeader>
               <TableRow>
                 {!readOnly && (
@@ -247,6 +308,18 @@ export function ItemTable({
           </table>
         </Table>
       </div>
+
+      {mobileBottomScrollbar && (
+        <div className="md:hidden">
+          <div
+            ref={bottomScrollRef}
+            className="h-4 overflow-x-auto overflow-y-hidden rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--bg))]"
+            aria-hidden
+          >
+            <div ref={bottomInnerRef} className="h-4" />
+          </div>
+        </div>
+      )}
 
       <div className="flex justify-end">
         <dl className="w-64 space-y-1 text-sm">

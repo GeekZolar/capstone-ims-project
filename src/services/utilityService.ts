@@ -2,6 +2,7 @@ import getApiConfig from '../config/api.config'
 import type { RoleRecord } from '../types/ims'
 import { apiClient } from './api'
 import type {
+  CategoryUtilityRecord,
   CountryUtilityRecord,
   ProductUtilityRecord,
   Supplier,
@@ -63,6 +64,14 @@ export const utilityService = {
     return Array.isArray(data) ? data : []
   },
 
+  async getCategories(): Promise<CategoryUtilityRecord[]> {
+    const config = getApiConfig()
+    const rawPath = (config.categoriesEndpoint ?? '/utility/categories') as string
+    const path = rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+    const { data } = await apiClient.get<CategoryUtilityRecord[]>(path)
+    return Array.isArray(data) ? data : []
+  },
+
   async getWarehousesByCountry(countryName: string): Promise<WarehouseApi[]> {
     const config = getApiConfig()
     const rawPath = config.warehousesEndpoint ?? '/utility/warehouses'
@@ -85,6 +94,22 @@ export const utilityService = {
     const path = rawPath.startsWith('/') ? rawPath : `/${rawPath}`
     const { data } = await apiClient.get<ProductUtilityRecord[]>(path)
     return Array.isArray(data) ? data : []
+  },
+
+  async createProduct(payload: UtilityProductUpsertPayload): Promise<ProductUtilityRecord> {
+    const config = getApiConfig()
+    const rawPath = (config.productsEndpoint ?? '/utility/products') as string
+    const path = rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+    const { data } = await apiClient.post<ProductUtilityRecord>(path, payload)
+    return data
+  },
+
+  async updateProduct(productId: string, payload: UtilityProductUpsertPayload): Promise<ProductUtilityRecord> {
+    const config = getApiConfig()
+    const rawPath = (config.productsEndpoint ?? '/utility/products') as string
+    const base = rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+    const { data } = await apiClient.put<ProductUtilityRecord>(`${base}/${encodeURIComponent(productId)}`, payload)
+    return data
   },
 
   async getRegistrationRoles(): Promise<RoleRecord[]> {
@@ -113,5 +138,23 @@ export const utilityService = {
       })
       .filter((r): r is RoleRecord => r !== null)
   },
+}
+
+export interface UtilityProductUpsertPayload {
+  supplierId: string
+  productName: string
+  description?: string | null
+  categoryId: string
+  productSize: string
+  sku: string
+  minOrderPallet: number
+  casePerPallet: number
+  shelfLifeMonth: number
+  isActive: boolean
+  isSeasonal: boolean
+  seasonStartDate?: string | null
+  seasonEndDate?: string | null
+  countryCode: string
+  note?: string | null
 }
 

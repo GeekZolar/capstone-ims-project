@@ -6,23 +6,40 @@ import { PageHeader } from '../components/common/PageHeader'
 import { Skeleton } from '../components/common/Skeleton'
 import { StatusPill } from '../components/common/StatusPill'
 import { Table, TableCell, TableHeader, TableRow } from '../components/common/Table'
-import { usePurchaseOrders, useWarehouses } from '../hooks/useImsQueries'
+import { purchaseOrderQueryKey, usePurchaseOrdersList } from '../hooks/usePoQueries'
 import { formatCurrency, formatDate } from '../utils/format'
 import { useNavigate } from 'react-router-dom'
+import { useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
-const statusMap = {
+const statusMap: Record<
+  string,
+  { label: string; variant: 'info' | 'success' | 'warning' | 'danger' }
+> = {
   draft: { label: 'Draft', variant: 'info' },
   approved: { label: 'Approved', variant: 'success' },
   sent: { label: 'Sent', variant: 'warning' },
   partially_received: { label: 'Partially Received', variant: 'warning' },
   received: { label: 'Received', variant: 'success' },
   cancelled: { label: 'Cancelled', variant: 'danger' },
-} as const
+  rejected: { label: 'Rejected', variant: 'danger' },
+  pending: { label: 'Pending', variant: 'warning' },
+}
+
+function statusDisplay(status: string) {
+  const key = status.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  return statusMap[key] ?? { label: status || '—', variant: 'info' as const }
+}
 
 export const PurchaseOrders = () => {
-  const poQuery = usePurchaseOrders()
-  const warehousesQuery = useWarehouses()
+  const poQuery = usePurchaseOrdersList()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const draftCount = useMemo(() => {
+    const rows = poQuery.data ?? []
+    return rows.filter((po) => po.status.trim().toLowerCase() === 'draft').length
+  }, [poQuery.data])
 
   return (
     <div className="space-y-6">
@@ -31,7 +48,7 @@ export const PurchaseOrders = () => {
         description="Create, approve, and track supplier purchase orders."
         actions={
           <Button onClick={() => navigate('/purchase-orders/new')}>
-            New PO
+            Create New PO
           </Button>
         }
       />
@@ -39,9 +56,15 @@ export const PurchaseOrders = () => {
       <Card className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
         <div>
           <p className="font-semibold text-slate-900">Approval queue</p>
-          <p>3 POs awaiting approval from KS or MO.</p>
+          <p>
+            {poQuery.isLoading
+              ? 'Loading…'
+              : `${draftCount} PO${draftCount === 1 ? '' : 's'} in draft awaiting approval.`}
+          </p>
         </div>
-        <Button variant="secondary">View approval queue</Button>
+        {/* <Button variant="secondary" type="button" onClick={() => navigate('/purchase-orders/new')}>
+          Create PO
+        </Button> */}
       </Card>
 
       {poQuery.isLoading ? (
@@ -74,26 +97,37 @@ export const PurchaseOrders = () => {
             </TableHeader>
             <tbody>
               {poQuery.data?.map((po) => {
-                const status = statusMap[po.status]
-                const warehouse = warehousesQuery.data?.find((wh) => wh.id === po.warehouseId)
+                const status = statusDisplay(po.status)
+                const supplierLabel = po.supplierName?.trim() || po.supplierId || '—'
+                const warehouseLabel = po.warehouseName?.trim() || po.warehouseId || '—'
                 return (
                   <TableRow key={po.id}>
-                    <TableCell className="font-semibold text-slate-900">{po.poNumber}</TableCell>
-                    <TableCell>{po.supplier}</TableCell>
-                    <TableCell>{warehouse?.name ?? 'Unknown'}</TableCell>
+                    <TableCell className="font-semibold text-slate-900">
+                      {po.poNumber?.trim() || po.id}
+                    </TableCell>
+                    <TableCell>{supplierLabel}</TableCell>
+                    <TableCell>{warehouseLabel}</TableCell>
                     <TableCell>
                       <StatusPill label={status.label} variant={status.variant} />
                     </TableCell>
-                    <TableCell>{formatDate(po.orderDate)}</TableCell>
-                    <TableCell>{formatDate(po.expectedDeliveryDate)}</TableCell>
+                    <TableCell>{po.orderDate ? formatDate(po.orderDate) : '—'}</TableCell>
+                    <TableCell>
+                      {po.expectedDeliveryDate ? formatDate(po.expectedDeliveryDate) : '—'}
+                    </TableCell>
                     <TableCell>{formatCurrency(po.totalValue, po.currency)}</TableCell>
                     <TableCell>
                       <Button
                         variant="ghost"
-                        className="text-xs"
-                        onClick={() => navigate(`/po/approve/${po.id}`)}
+                        type="button"
+                        className="cursor-pointer rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-700 hover:bg-slate-200"
+                        onClick={() => {
+                          if (po.detail) {
+                            queryClient.setQueryData(purchaseOrderQueryKey(po.id), po.detail)
+                          }
+                          navigate(`/po/approve/${po.id}`)
+                        }}
                       >
-                        Approve
+                        View detail
                       </Button>
                     </TableCell>
                   </TableRow>

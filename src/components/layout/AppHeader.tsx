@@ -5,7 +5,13 @@ import { useUiStore } from '../../store/uiStore'
 import { useAuthStore } from '../../store/authStore'
 import { ThemeToggle } from '../common/ThemeToggle'
 
-export const AppHeader = () => {
+export const AppHeader = ({
+  sidebarCollapsed,
+  onToggleSidebarCollapsed,
+}: {
+  sidebarCollapsed: boolean
+  onToggleSidebarCollapsed: () => void
+}) => {
   const setSidebarOpen = useUiStore((state) => state.setSidebarOpen)
   const userAvatar = useUiStore((state) => state.userAvatar)
   const user = useAuthStore((state) => state.user)
@@ -31,6 +37,15 @@ export const AppHeader = () => {
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] md:hidden"
           onClick={() => setSidebarOpen(true)}
           aria-label="Open menu"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          className="hidden h-9 w-9 items-center justify-center rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] md:inline-flex"
+          onClick={onToggleSidebarCollapsed}
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <Menu className="h-4 w-4" />
         </button>

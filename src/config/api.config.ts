@@ -14,10 +14,14 @@ export default () => ({
     import.meta.env.VITE_SUPPLIERS_ENDPOINT ?? '/utility/suppliers',
   countriesEndpoint:
     import.meta.env.VITE_COUNTRIES_ENDPOINT ?? '/utility/countries',
+  categoriesEndpoint:
+    import.meta.env.VITE_CATEGORIES_ENDPOINT ?? '/utility/categories',
   warehousesEndpoint:
     import.meta.env.VITE_WAREHOUSES_ENDPOINT ?? '/utility/warehouses',
   productsEndpoint:
     import.meta.env.VITE_PRODUCTS_ENDPOINT ?? '/utility/products',
+  purchaseOrdersEndpoint:
+    import.meta.env.VITE_PURCHASE_ORDERS_ENDPOINT ?? '/purchase-orders',
   mfaSetupEndpoint:
     import.meta.env.VITE_MFA_SETUP_ENDPOINT ?? import.meta.env.MFA_SETUP_ENDPOINT ?? '/auth/mfa/setup',
   mfaVerifyEndpoint:
