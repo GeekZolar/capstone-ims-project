@@ -1,9 +1,11 @@
 import axios from 'axios'
+import type { AxiosError } from 'axios'
 
 /** Prefer server validation / problem details over generic axios text. */
 export function getAxiosErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    const data = error.response?.data
+    const err = error as AxiosError<unknown>
+    const data = err.response?.data
     if (typeof data === 'string' && data.trim()) return data.trim()
     if (data && typeof data === 'object') {
       const o = data as Record<string, unknown>
@@ -25,7 +27,7 @@ export function getAxiosErrorMessage(error: unknown): string {
         if (lines.length) return lines.join('; ')
       }
     }
-    return error.message
+    return err.message
   }
   if (error instanceof Error) return error.message
   return 'Request failed'

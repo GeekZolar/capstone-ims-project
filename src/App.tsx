@@ -13,6 +13,15 @@ const Dashboard = lazy(() =>
 const Inventory = lazy(() =>
   import('./pages/Inventory').then((m) => ({ default: m.Inventory })),
 )
+const Products = lazy(() =>
+  import('./pages/Products').then((m) => ({ default: m.Products })),
+)
+const ProductCreate = lazy(() =>
+  import('./pages/ProductCreate').then((m) => ({ default: m.ProductCreate })),
+)
+const ProductEdit = lazy(() =>
+  import('./pages/ProductEdit').then((m) => ({ default: m.ProductEdit })),
+)
 const Replenishment = lazy(() =>
   import('./pages/Replenishment').then((m) => ({ default: m.Replenishment })),
 )
@@ -76,6 +85,9 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/access-denied" element={<AccessDenied />} />
               <Route path="/inventory" element={<Inventory />} />
+              <Route path="/products" element={<Products />} />
+              <Route path="/products/new" element={<ProductCreate />} />
+              <Route path="/products/:productId/edit" element={<ProductEdit />} />
               <Route path="/replenishment" element={<Replenishment />} />
               <Route path="/purchase-orders" element={<PurchaseOrders />} />
               <Route path="/purchase-orders/new" element={<PurchaseOrderCreate />} />

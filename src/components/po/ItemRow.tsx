@@ -101,6 +101,7 @@ export function ItemRow({
                 const p = products?.find((x) => x.productId === id)
                 if (!p) return
                 onUpdate(item.id, {
+                  productId: p.productId ?? '',
                   productName: p.productName ?? '',
                   sku: p.sku ?? '',
                   description: p.description ?? '',

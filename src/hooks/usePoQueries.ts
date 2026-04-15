@@ -6,6 +6,7 @@ import type { LocationCode } from '../types/po'
 export const suppliersQueryKey = ['po', 'suppliers'] as const
 export const warehousesQueryKey = (location: LocationCode) => ['po', 'warehouses', location] as const
 export const purchaseOrderQueryKey = (id: string) => ['po', 'detail', id] as const
+export const purchaseOrdersListQueryKey = ['purchase-orders', 'list'] as const
 export const countriesQueryKey = ['po', 'countries'] as const
 export const utilityWarehousesQueryKey = (countryName: string) => ['po', 'utility-warehouses', countryName] as const
 
@@ -47,13 +48,20 @@ export function usePurchaseOrder(poId: string | undefined) {
   })
 }
 
+export function usePurchaseOrdersList() {
+  return useQuery({
+    queryKey: purchaseOrdersListQueryKey,
+    queryFn: () => poService.listPurchaseOrders(),
+  })
+}
+
 export function useApprovePurchaseOrder(poId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => poService.approvePurchaseOrder(poId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: purchaseOrderQueryKey(poId) })
-      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] })
+      queryClient.invalidateQueries({ queryKey: purchaseOrdersListQueryKey })
     },
   })
 }
@@ -65,7 +73,7 @@ export function useRejectPurchaseOrder(poId: string) {
       poService.rejectPurchaseOrder(poId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: purchaseOrderQueryKey(poId) })
-      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] })
+      queryClient.invalidateQueries({ queryKey: purchaseOrdersListQueryKey })
     },
   })
 }
@@ -77,7 +85,7 @@ export function useRequestChangesPurchaseOrder(poId: string) {
       poService.requestChangesPurchaseOrder(poId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: purchaseOrderQueryKey(poId) })
-      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] })
+      queryClient.invalidateQueries({ queryKey: purchaseOrdersListQueryKey })
     },
   })
 }

@@ -4,6 +4,7 @@ import {
   FileText,
   LayoutDashboard,
   RefreshCcw,
+  Package,
   Settings,
   ShoppingCart,
   Truck,
@@ -22,6 +23,7 @@ export type NavigationItem = {
 export const navigation: NavigationItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Inventory', path: '/inventory', icon: Boxes },
+  { label: 'Products', path: '/products', icon: Package },
   { label: 'Replenishment', path: '/replenishment', icon: RefreshCcw },
   { label: 'Purchase Orders', path: '/purchase-orders', icon: ShoppingCart },
   { label: 'Transfers', path: '/transfers', icon: Truck },
